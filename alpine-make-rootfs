@@ -92,7 +92,7 @@
 set -eu
 
 readonly PROGNAME='alpine-make-rootfs'
-readonly VERSION='0.8.1'
+readonly VERSION='0.8.1-orhid'
 
 # Base Alpine packages to install in rootfs.
 readonly ALPINE_BASE_PKGS='alpine-baselayout busybox busybox-suid musl-utils'
@@ -130,12 +130,14 @@ if ! command -v realpath >/dev/null; then
 fi
 
 die() {
-	printf '\033[1;31mERROR:\033[0m %s\n' "$@" >&2  # bold red
+	printf '\033[1m[%s]\033[1;31m ERROR: %s: %s\033[0m\n' \
+		"$(date '+2k%y%b%d %H:%M:%S')" "$PROGNAME" "$*"
 	exit 1
 }
 
 einfo() {
-	printf '\n\033[1;36m> %s\033[0m\n' "$@" >&2  # bold cyan
+	printf '\033[1m[%s]\033[1;36m %s: %s\033[0m\n' \
+		"$(date '+2k%y%b%d %H:%M:%S')" "$PROGNAME" "$*"
 }
 
 # Prints help and exists with the specified status.
@@ -157,7 +159,7 @@ cleanup() {
 	fi
 	if [ -d "$rootfs" ]; then
 		umount_recursively "$rootfs" \
-			|| die "Failed to unmount mounts inside $rootfs!"
+			|| die "failed to unmount mounts inside $rootfs!"
 		[ "$rootfs" = "$ROOTFS_DEST" ] || rm -Rf "$rootfs"
 	fi
 }
@@ -290,8 +292,8 @@ ROOTFS_DEST="$1"; shift
 SCRIPT=
 [ $# -eq 0 ] || { SCRIPT="$1"; shift; }
 
-[ "$(id -u)" -eq 0 ] || die 'This script must be run as root!'
-[ ! -e "${TEMP_DIR:-}" ] || die "Temp path $TEMP_DIR must not exist!"
+[ "$(id -u)" -eq 0 ] || die 'this script must be run as root!'
+[ ! -e "${TEMP_DIR:-}" ] || die "temp path $TEMP_DIR must not exist!"
 
 : ${ALPINE_BRANCH:="latest-stable"}
 : ${ALPINE_MIRROR:="http://dl-cdn.alpinelinux.org/alpine"}
@@ -321,7 +323,7 @@ esac
 [ -z "$FS_SKEL_DIR" ] || host_pkgs="$host_pkgs rsync"
 
 [ "$PACKAGES" ] || [ "$DEFAULT_PKGS" = 'yes' ] || \
-	die 'No packages specified to be installed!'
+	die 'no packages specified to be installed!'
 
 rootfs="$ROOTFS_DEST"
 if [ "$ROOTFS_DEST" = '-' ]; then
@@ -353,7 +355,7 @@ fi
 
 #-----------------------------------------------------------------------
 if [ "$INSTALL_HOST_PKGS" = yes ] && [ "$host_pkgs" ]; then
-	einfo "Installing $host_pkgs on host system"
+	einfo "installing $host_pkgs on host system"
 	_apk add -t $VIRTUAL_PKG $host_pkgs >&2
 fi
 
@@ -367,7 +369,7 @@ if ! command -v "$APK" >/dev/null; then
 fi
 
 #-----------------------------------------------------------------------
-einfo 'Installing system'
+einfo 'installing system'
 
 mkdir -p "$rootfs"/etc/apk/keys
 
@@ -410,18 +412,18 @@ sed -i 's/^root::/root:*:/' "$rootfs"/etc/shadow
 
 #-----------------------------------------------------------------------
 if [ "$TIMEZONE" ]; then
-	einfo "Setting timezone $TIMEZONE"
+	einfo "setting timezone $TIMEZONE"
 	setup_timezone "$TIMEZONE" "$rootfs" >&2
 fi
 
 #-----------------------------------------------------------------------
 if [ "$FS_SKEL_DIR" ]; then
-	einfo "Copying content of $FS_SKEL_DIR into rootfs"
+	einfo "copying content of $FS_SKEL_DIR into rootfs"
 
 	[ "$FS_SKEL_CHOWN" ] \
 		&& rsync_opts="--chown $FS_SKEL_CHOWN" \
 		|| rsync_opts='--numeric-ids'
-	rsync --archive --info=NAME2 --whole-file $rsync_opts "$FS_SKEL_DIR"/ "$rootfs"/ >&2
+	rsync --quiet --archive --info=NAME2 --whole-file $rsync_opts "$FS_SKEL_DIR"/ "$rootfs"/ >&2
 
 	# rsync may modify perms of the rootfs dir itself, so make sure it's correct.
 	install -d -m 0755 -o root -g root "$rootfs"
@@ -432,11 +434,11 @@ if [ "$SCRIPT" ]; then
 	script_name="${script_file##*/}"
 
 	if [ "$SCRIPT_CHROOT" = 'no' ]; then
-		einfo "Executing script: $script_name $*"
+		einfo "executing script: $script_name $*"
 
-		ROOTFS="$rootfs" "$script_file" "$@" >&2 || die 'Script failed'
+		ROOTFS="$rootfs" "$script_file" "$@" >&2 || die 'script failed'
 	else
-		einfo 'Preparing chroot'
+		einfo 'preparing chroot'
 
 		_apk add --root "$rootfs" -t "$VIRTUAL_PKG" apk-tools >&2
 		prepare_chroot "$rootfs"
@@ -449,14 +451,14 @@ if [ "$SCRIPT" ]; then
 			bind_dir="$(dirname "$script_file")"
 			script_file2="./$script_name"
 		fi
-		echo "Mounting $bind_dir to /mnt inside chroot" >&2
+		echo "mounting $bind_dir to /mnt inside chroot" >&2
 		mount_bind "$bind_dir" "$rootfs"/mnt
 
-		einfo "Executing script in chroot: $script_name $*"
+		einfo "executing script in chroot: $script_name $*"
 
 		chroot "$rootfs" \
 			/bin/sh -c "cd /mnt && $script_file2 \"\$@\"" -- "$@" >&2 \
-			|| die 'Script failed'
+			|| die 'script failed'
 
 		[ "$SCRIPT" = '-' ] && rm -f "$rootfs/$script_name"
 		umount_recursively "$rootfs"
@@ -464,7 +466,7 @@ if [ "$SCRIPT" ]; then
 fi
 
 #-----------------------------------------------------------------------
-einfo 'Cleaning-up rootfs'
+einfo 'cleaning-up rootfs'
 
 if _apk info --root "$rootfs" --quiet --installed "$VIRTUAL_PKG"; then
 	_apk del --root "$rootfs" --purge "$VIRTUAL_PKG" >&2
@@ -488,7 +490,7 @@ done
 
 #-----------------------------------------------------------------------
 if [ "$tar_opts" ]; then
-	einfo 'Creating rootfs archive'
+	einfo 'creating rootfs archive'
 
 	tar -C "$rootfs" $tar_opts --numeric-owner -f "$ROOTFS_DEST" .
 
