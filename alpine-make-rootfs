@@ -105,9 +105,12 @@ alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub:MIICIjANBgkqhkiG9w0BAQEFAAOC
 '
 # List of directories to remove when empty.
 readonly UNNECESSARY_DIRS='
-	/home /media/cdrom /media/floppy /media/usb /mnt /srv /usr/local/bin
-	/usr/local/lib /usr/local/share
+	/media/cdrom /media/floppy /media/usb
+	/mnt /srv /home /root
+	/usr/local/bin /usr/local/lib /usr/local/share /usr/local/sbin
+	/dev /proc /sys /tmp
 '
+
 # An opaque string used to detect changes in resolv.conf.
 readonly RESOLVCONF_MARK="### created by $PROGNAME ###"
 # Name used as a "virtual package" for temporarily installed packages.
@@ -451,7 +454,6 @@ if [ "$SCRIPT" ]; then
 			bind_dir="$(dirname "$script_file")"
 			script_file2="./$script_name"
 		fi
-		echo "mounting $bind_dir to /mnt inside chroot" >&2
 		mount_bind "$bind_dir" "$rootfs"/mnt
 
 		einfo "executing script in chroot: $script_name $*"
